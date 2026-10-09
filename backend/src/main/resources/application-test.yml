@@ -1,0 +1,5 @@
+# Used by JUnit (@ActiveProfiles("test")). The "test" profile also turns on "h2" (see spring.profiles.group).
+logging:
+  level:
+    org.springframework: WARN
+    org.hibernate: WARN
