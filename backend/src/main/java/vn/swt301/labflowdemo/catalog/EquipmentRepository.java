@@ -13,10 +13,10 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long> {
 
     Optional<Equipment> findBySerialIgnoreCase(String serial);
 
-    /** S16: search name/serial, filter lab/type/status - paged on the server. */
+    /** S16: search name/serial (q = "" matches all), filter lab/type/status - paged on the server. */
     @Query("""
             select e from Equipment e
-            where (:q is null or lower(e.serial) like lower(concat('%', :q, '%'))
+            where (lower(e.serial) like lower(concat('%', :q, '%'))
                               or lower(e.name) like lower(concat('%', :q, '%')))
               and (:labId is null or e.labId = :labId)
               and (:typeId is null or e.typeId = :typeId)
