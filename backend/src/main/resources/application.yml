@@ -1,0 +1,50 @@
+# LabFlow AI demo (SWT301) - default profile = local PostgreSQL from docker-compose.yml
+# Other profiles: h2 (run without Docker), test (JUnit, H2 in memory)
+spring:
+  application:
+    name: labflow-demo
+  profiles:
+    group:
+      test: h2
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/labflow_demo}
+    username: ${DB_USER:labflow}
+    password: ${DB_PASSWORD:labflow}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # schema belongs to Flyway, never to Hibernate
+    # Instant fields map to TIMESTAMP WITH TIME ZONE and are stored in UTC (ADR-002).
+    # Do NOT set hibernate.jdbc.time_zone: it also shifts TIME columns (opening hours) by the JVM offset.
+  flyway:
+    locations: classpath:db/migration/common,classpath:db/migration/{vendor}
+  mail:
+    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
+    port: ${MAIL_PORT:2525}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+
+app:
+  zone: Asia/Ho_Chi_Minh          # business rules (opening hours...) use Vietnam time
+  jwt:
+    # >= 32 bytes. Override with JWT_SECRET in every real environment.
+    secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+    access-minutes: 15
+    refresh-days: 7
+  mail:
+    enabled: ${MAIL_ENABLED:false} # false = print the email to the log instead of sending it
+    from: no-reply@labflow-demo.local
+  public-url: ${PUBLIC_URL:http://localhost:8080}
+
+logging:
+  level:
+    vn.swt301.labflowdemo: INFO
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
