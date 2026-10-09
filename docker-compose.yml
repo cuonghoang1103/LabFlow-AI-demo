@@ -1,0 +1,21 @@
+# Local PostgreSQL for LabFlow demo: docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: labflow-demo-postgres
+    environment:
+      POSTGRES_DB: labflow_demo
+      POSTGRES_USER: labflow
+      POSTGRES_PASSWORD: labflow
+    ports:
+      - "5433:5432"   # 5433 on your machine, so it does not clash with a locally installed PostgreSQL
+    volumes:
+      - labflow-demo-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labflow -d labflow_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  labflow-demo-pg:
