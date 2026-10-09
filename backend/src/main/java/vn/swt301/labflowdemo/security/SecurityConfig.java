@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import vn.swt301.labflowdemo.common.ApiResponse;
 
@@ -26,7 +27,7 @@ import vn.swt301.labflowdemo.common.ApiResponse;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, ObjectMapper objectMapper)
+    SecurityFilterChain filterChain(HttpSecurity http, RateLimitFilter rateLimitFilter, ObjectMapper objectMapper)
             throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)               // stateless API with Bearer tokens, no cookies
@@ -42,7 +43,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(o -> o
                         .jwt(j -> j.jwtAuthenticationConverter(rolesFromClaim()))
                         .authenticationEntryPoint((req, res, ex) -> writeError(res, objectMapper, 401, "UNAUTHORIZED", "Login required or token expired"))
-                        .accessDeniedHandler((req, res, ex) -> writeError(res, objectMapper, 403, "FORBIDDEN", "You do not have permission to do this")));
+                        .accessDeniedHandler((req, res, ex) -> writeError(res, objectMapper, 403, "FORBIDDEN", "You do not have permission to do this")))
+                .addFilterBefore(rateLimitFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 
