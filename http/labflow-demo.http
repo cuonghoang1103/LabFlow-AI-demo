@@ -1,0 +1,267 @@
+### LabFlow demo API — VS Code "REST Client" extension (humao.rest-client).
+### Chạy app trước: cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=h2
+### Mật khẩu mọi tài khoản demo: Labflow123. Thời gian là UTC: 02:00Z = 09:00 giờ Việt Nam.
+### Đổi @day thành một ngày thứ Ba trong 14 ngày tới.
+
+@base = http://localhost:8080/api/v1
+@day = 2026-10-13
+
+### Ping (không cần đăng nhập)
+GET {{base}}/ping
+
+### ── AUTH ─────────────────────────────────────────────
+### Đăng ký (BR-01: chỉ email @fpt.edu.vn / @fe.edu.vn). Link xác minh in ra log của app.
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{ "email": "newbie@fpt.edu.vn", "password": "Newbie2026", "fullName": "New Bie" }
+
+### Xác minh email (dán token từ log "Open this link to activate your account: ...token=XXX")
+POST {{base}}/auth/verify-email
+Content-Type: application/json
+
+{ "token": "PASTE_TOKEN_FROM_LOG" }
+
+### Đăng nhập — sinh viên
+# @name loginStudent
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "student1@fpt.edu.vn", "password": "Labflow123" }
+
+### Đăng nhập — quản lý lab
+# @name loginManager
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "manager@fpt.edu.vn", "password": "Labflow123" }
+
+### Đăng nhập — admin
+# @name loginAdmin
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@fpt.edu.vn", "password": "Labflow123" }
+
+### Đăng nhập — lab staff
+# @name loginStaff
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "staff@fpt.edu.vn", "password": "Labflow123" }
+
+@student = {{loginStudent.response.body.data.accessToken}}
+@manager = {{loginManager.response.body.data.accessToken}}
+@admin = {{loginAdmin.response.body.data.accessToken}}
+@staff = {{loginStaff.response.body.data.accessToken}}
+
+### Sai mật khẩu (5 lần liên tiếp ⇒ khoá 15 phút, BR-02)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "student2@fpt.edu.vn", "password": "wrong1234" }
+
+### Làm mới token (xoay vòng: token cũ hết dùng được)
+POST {{base}}/auth/refresh
+Content-Type: application/json
+
+{ "token": "{{loginStudent.response.body.data.refreshToken}}" }
+
+### Đăng xuất (thu hồi refresh token)
+POST {{base}}/auth/logout
+Content-Type: application/json
+
+{ "token": "{{loginStudent.response.body.data.refreshToken}}" }
+
+### Đổi mật khẩu
+POST {{base}}/auth/change-password
+Authorization: Bearer {{student}}
+Content-Type: application/json
+
+{ "currentPassword": "Labflow123", "newPassword": "Labflow456" }
+
+### Quên mật khẩu (luôn trả cùng một thông báo; link in ra log)
+POST {{base}}/auth/forgot-password
+Content-Type: application/json
+
+{ "email": "student2@fpt.edu.vn" }
+
+### Đặt lại mật khẩu
+POST {{base}}/auth/reset-password
+Content-Type: application/json
+
+{ "token": "PASTE_TOKEN_FROM_LOG", "newPassword": "Reset2026a" }
+
+### ── PROFILE + USERS ──────────────────────────────────
+GET {{base}}/me
+Authorization: Bearer {{student}}
+
+###
+PUT {{base}}/me
+Authorization: Bearer {{student}}
+Content-Type: application/json
+
+{ "fullName": "Demo Student One", "phone": "0912345678", "avatarUrl": "https://example.com/a.png" }
+
+### Danh sách user (ADMIN): search + filter + sort + paging
+GET {{base}}/users?q=student&role=STUDENT&status=ACTIVE&page=0&size=10&sort=email,asc
+Authorization: Bearer {{admin}}
+
+### Tạo user (ADMIN)
+POST {{base}}/users
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{ "email": "tech01@fpt.edu.vn", "fullName": "Tech One", "password": "Tech2026x", "roles": ["STAFF"] }
+
+### Sửa user (ADMIN)
+PUT {{base}}/users/3
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{ "fullName": "Demo Lab Staff", "roles": ["STAFF", "LECTURER"] }
+
+### Khoá / mở khoá user (ADMIN)
+PATCH {{base}}/users/6/status
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{ "status": "LOCKED" }
+
+### ── SETTINGS (BR values) ─────────────────────────────
+GET {{base}}/settings
+Authorization: Bearer {{admin}}
+
+###
+PUT {{base}}/settings/booking.max-advance-days
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{ "value": "14" }
+
+### ── BUILDINGS + LABS ─────────────────────────────────
+GET {{base}}/buildings
+Authorization: Bearer {{student}}
+
+###
+POST {{base}}/buildings
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "code": "GA", "name": "Gamma" }
+
+### Danh sách lab: search + filter + sort + paging
+GET {{base}}/labs?q=lab&status=ACTIVE&minCapacity=20&page=0&size=10&sort=capacity,desc
+Authorization: Bearer {{student}}
+
+###
+GET {{base}}/labs/1
+Authorization: Bearer {{student}}
+
+### Tạo lab (31 chỗ > 30 ⇒ requiresApproval = true, BR-06)
+POST {{base}}/labs
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "buildingId": 1, "code": "AL-401", "name": "AI Lab", "floor": 4, "capacity": 31 }
+
+### Sửa lab (gửi version đang thấy; sai version ⇒ CONCURRENT_UPDATE)
+PUT {{base}}/labs/5
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "buildingId": 1, "code": "AL-401", "name": "AI Lab", "floor": 4, "capacity": 30, "version": 0 }
+
+###
+PATCH {{base}}/labs/4/status
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### ── EQUIPMENT ────────────────────────────────────────
+GET {{base}}/equipment-types
+Authorization: Bearer {{student}}
+
+###
+GET {{base}}/equipment?labId=3&status=AVAILABLE&sort=serial
+Authorization: Bearer {{staff}}
+
+###
+POST {{base}}/equipment
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "labId": 1, "typeId": 2, "serial": "MCU-ESP32-03", "name": "ESP32 DevKit #3", "requiresTraining": false, "requiresApproval": false }
+
+###
+PUT {{base}}/equipment/4
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "labId": 1, "typeId": 2, "serial": "MCU-ESP32-01", "name": "ESP32 DevKit #1 (rev B)", "requiresTraining": false, "requiresApproval": false }
+
+### Đổi trạng thái (MAINTENANCE/RETIRED cần lý do)
+PATCH {{base}}/equipment/1/status
+Authorization: Bearer {{staff}}
+Content-Type: application/json
+
+{ "status": "MAINTENANCE", "reason": "Probe broken" }
+
+### Đổi trạng thái hàng loạt (tất cả hoặc không)
+PATCH {{base}}/equipment/status
+Authorization: Bearer {{staff}}
+Content-Type: application/json
+
+{ "ids": [4, 5], "status": "MAINTENANCE", "reason": "Firmware update" }
+
+### ── OPERATING CALENDAR ───────────────────────────────
+GET {{base}}/labs/3/hours
+Authorization: Bearer {{student}}
+
+### Giờ mở cửa thứ Bảy (6) của lab 1
+PUT {{base}}/operating-hours
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "labId": 1, "dayOfWeek": 6, "openTime": "08:00", "closeTime": "17:00", "closed": false }
+
+###
+POST {{base}}/blackouts
+Authorization: Bearer {{manager}}
+Content-Type: application/json
+
+{ "labId": 2, "startAt": "{{day}}T06:00:00Z", "endAt": "{{day}}T08:00:00Z", "reason": "Network maintenance" }
+
+###
+GET {{base}}/labs/2/blackouts
+Authorization: Bearer {{student}}
+
+### ── AVAILABILITY ─────────────────────────────────────
+GET {{base}}/availability?from={{day}}T02:00:00Z&to={{day}}T04:00:00Z&capacity=20
+Authorization: Bearer {{student}}
+
+###
+GET {{base}}/availability/equipment?from={{day}}T02:00:00Z&to={{day}}T04:00:00Z&typeId=1
+Authorization: Bearer {{student}}
+
+### ── RESERVATION (spike) ──────────────────────────────
+### Gửi lại cùng Idempotency-Key ⇒ 200 + cùng đặt chỗ (không tạo cái thứ hai)
+POST {{base}}/reservations
+Authorization: Bearer {{student}}
+Idempotency-Key: demo-key-0001
+Content-Type: application/json
+
+{ "labId": 1, "startAt": "{{day}}T02:00:00Z", "endAt": "{{day}}T04:00:00Z", "purpose": "IoT practice" }
+
+### Trùng giờ ⇒ 409 RES_CONFLICT
+POST {{base}}/reservations
+Authorization: Bearer {{student}}
+Idempotency-Key: demo-key-0002
+Content-Type: application/json
+
+{ "labId": 1, "startAt": "{{day}}T03:00:00Z", "endAt": "{{day}}T05:00:00Z", "purpose": "IoT practice" }
+
+###
+GET {{base}}/reservations/mine
+Authorization: Bearer {{student}}
