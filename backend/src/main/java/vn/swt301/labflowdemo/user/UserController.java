@@ -24,10 +24,11 @@ import vn.swt301.labflowdemo.common.PageResponse;
 import vn.swt301.labflowdemo.security.CurrentUser;
 import vn.swt301.labflowdemo.user.UserDtos.ChangeStatusRequest;
 import vn.swt301.labflowdemo.user.UserDtos.CreateUserRequest;
+import vn.swt301.labflowdemo.user.UserDtos.ProfileRequest;
 import vn.swt301.labflowdemo.user.UserDtos.UpdateUserRequest;
 import vn.swt301.labflowdemo.user.UserDtos.UserView;
 
-/** S10/S11 (/api/v1/users, ADMIN only). */
+/** S10/S11 (/api/v1/users, ADMIN only) and S06 (/api/v1/me, any logged-in user). */
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
@@ -71,4 +72,13 @@ public class UserController {
         return ApiResponse.ok(userService.changeStatus(id, body.status(), CurrentUser.id(jwt)));
     }
 
+    @GetMapping("/me")
+    public ApiResponse<UserView> me(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.ok(userService.getProfile(CurrentUser.id(jwt)));
+    }
+
+    @PutMapping("/me")
+    public ApiResponse<UserView> updateMe(@Valid @RequestBody ProfileRequest body, @AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.ok(userService.updateProfile(CurrentUser.id(jwt), body));
+    }
 }

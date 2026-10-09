@@ -14,6 +14,7 @@ import vn.swt301.labflowdemo.common.ErrorCode;
 import vn.swt301.labflowdemo.common.PageResponse;
 import vn.swt301.labflowdemo.common.Texts;
 import vn.swt301.labflowdemo.user.UserDtos.CreateUserRequest;
+import vn.swt301.labflowdemo.user.UserDtos.ProfileRequest;
 import vn.swt301.labflowdemo.user.UserDtos.UpdateUserRequest;
 import vn.swt301.labflowdemo.user.UserDtos.UserView;
 
@@ -25,7 +26,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * User administration (S10 list, S11 detail - owner C5).
+ * User administration (S10 list, S11 detail - owner C5) and "My profile" (S06 - owner C1).
  */
 @Slf4j
 @Service
@@ -33,6 +34,7 @@ import java.util.regex.Pattern;
 public class UserService {
 
     static final Pattern EMAIL = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    static final Pattern VN_PHONE = Pattern.compile("^0\\d{9}$");
     static final int MAX_PAGE_SIZE = 100;
 
     private final UserRepository userRepository;
@@ -156,6 +158,40 @@ public class UserService {
         user.setUpdatedAt(now);
         auditService.record(actorId, "USER", id, "STATUS", before, newStatus.name());
         log.info("User status changed: id={}, {} -> {}, by={}", id, before, newStatus, actorId);
+        return UserView.of(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserView getProfile(Long userId) {
+        return UserView.of(find(userId));
+    }
+
+    /**
+     * S06 My profile: name 1-100 characters, phone = 10 digits starting with 0 (optional),
+     * avatar = http(s) URL up to 500 characters (optional). Blank optional fields clear the value.
+     *
+     * @throws BusinessException USER_NOT_FOUND, AUTH_FULL_NAME_INVALID, USER_PHONE_INVALID, USER_AVATAR_URL_INVALID
+     */
+    @Transactional
+    public UserView updateProfile(Long userId, ProfileRequest request) {
+        User user = find(userId);
+        if (!Texts.lengthBetween(request.fullName(), 1, 100)) {
+            throw new BusinessException(ErrorCode.AUTH_FULL_NAME_INVALID);
+        }
+        String phone = Texts.clean(request.phone());
+        if (phone != null && !VN_PHONE.matcher(phone).matches()) {
+            throw new BusinessException(ErrorCode.USER_PHONE_INVALID);
+        }
+        String avatar = Texts.clean(request.avatarUrl());
+        if (avatar != null && (avatar.length() > 500
+                || !(avatar.startsWith("https://") || avatar.startsWith("http://")))) {
+            throw new BusinessException(ErrorCode.USER_AVATAR_URL_INVALID);
+        }
+        user.setFullName(Texts.clean(request.fullName()));
+        user.setPhone(phone);
+        user.setAvatarUrl(avatar);
+        user.setUpdatedAt(Instant.now(clock));
+        log.info("Profile updated: userId={}", userId);
         return UserView.of(user);
     }
 
