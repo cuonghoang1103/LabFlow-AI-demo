@@ -54,7 +54,7 @@ public class EquipmentService {
                                                    Pageable pageable) {
         Pageable safe = pageable.getPageSize() > 100
                 ? PageRequest.of(pageable.getPageNumber(), 100, pageable.getSort()) : pageable;
-        return PageResponse.of(equipmentRepository.search(Texts.clean(q), labId, typeId, status, safe), e -> e);
+        return PageResponse.of(equipmentRepository.search(Texts.orEmpty(q), labId, typeId, status, safe), e -> e);
     }
 
     /** @throws BusinessException EQUIPMENT_NOT_FOUND */

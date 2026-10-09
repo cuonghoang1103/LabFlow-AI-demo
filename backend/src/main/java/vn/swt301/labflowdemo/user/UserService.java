@@ -49,7 +49,7 @@ public class UserService {
     public PageResponse<UserView> searchUsers(String q, RoleCode role, UserStatus status, Pageable pageable) {
         Pageable safe = pageable.getPageSize() > MAX_PAGE_SIZE
                 ? PageRequest.of(pageable.getPageNumber(), MAX_PAGE_SIZE, pageable.getSort()) : pageable;
-        return PageResponse.of(userRepository.search(Texts.clean(q), role, status, safe), UserView::of);
+        return PageResponse.of(userRepository.search(Texts.orEmpty(q), role, status, safe), UserView::of);
     }
 
     @Transactional(readOnly = true)

@@ -13,10 +13,10 @@ public interface LabRepository extends JpaRepository<Lab, Integer> {
 
     Optional<Lab> findByCodeIgnoreCase(String code);
 
-    /** S13: search code/name, filter building/status/min capacity - paged on the server. */
+    /** S13: search code/name (q = "" matches all), filter building/status/min capacity - paged on the server. */
     @Query("""
             select l from Lab l
-            where (:q is null or lower(l.code) like lower(concat('%', :q, '%'))
+            where (lower(l.code) like lower(concat('%', :q, '%'))
                               or lower(l.name) like lower(concat('%', :q, '%')))
               and (:buildingId is null or l.buildingId = :buildingId)
               and (:status is null or l.status = :status)

@@ -80,7 +80,7 @@ public class LabService {
                                         Pageable pageable) {
         Pageable safe = pageable.getPageSize() > 100
                 ? PageRequest.of(pageable.getPageNumber(), 100, pageable.getSort()) : pageable;
-        return PageResponse.of(labRepository.search(Texts.clean(q), buildingId, status, minCapacity, safe), l -> l);
+        return PageResponse.of(labRepository.search(Texts.orEmpty(q), buildingId, status, minCapacity, safe), l -> l);
     }
 
     /** @throws BusinessException LAB_NOT_FOUND */

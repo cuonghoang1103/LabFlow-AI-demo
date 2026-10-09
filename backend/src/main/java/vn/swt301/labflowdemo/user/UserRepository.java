@@ -14,10 +14,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmailIgnoreCase(String email);
 
-    /** S10: search by email/name + filter by role and status, paged and sorted on the server. */
+    /** S10: search by email/name (q = "" matches everything) + filter by role and status, paged and sorted on the server. */
     @Query("""
             select distinct u from User u left join u.roles r
-            where (:q is null or lower(u.email) like lower(concat('%', :q, '%'))
+            where (lower(u.email) like lower(concat('%', :q, '%'))
                               or lower(u.fullName) like lower(concat('%', :q, '%')))
               and (:role is null or r.code = :role)
               and (:status is null or u.status = :status)
