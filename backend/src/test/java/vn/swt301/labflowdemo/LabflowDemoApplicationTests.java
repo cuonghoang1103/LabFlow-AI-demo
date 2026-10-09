@@ -4,20 +4,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import vn.swt301.labflowdemo.settings.SettingsService;
+import vn.swt301.labflowdemo.catalog.LabRepository;
+import vn.swt301.labflowdemo.user.UserRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Smoke test: the Spring context starts on H2 and Flyway V1 ran (BR settings are there). */
+/** Smoke test: the whole Spring context starts on H2 and Flyway V1..V7 ran (seed data is there). */
 @SpringBootTest
 @ActiveProfiles("test")
 class LabflowDemoApplicationTests {
 
     @Autowired
-    SettingsService settingsService;
+    UserRepository userRepository;
+
+    @Autowired
+    LabRepository labRepository;
 
     @Test
-    void contextLoadsAndSettingsExist() {
-        assertThat(settingsService.getInt("booking.slot-minutes")).isEqualTo(30);
+    void contextLoadsAndSeedDataExists() {
+        assertThat(userRepository.findByEmailIgnoreCase("admin@fpt.edu.vn")).isPresent();
+        assertThat(labRepository.findByCodeIgnoreCase("AL-301")).isPresent();
     }
 }
