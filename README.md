@@ -62,6 +62,8 @@ Ai cũng đã có **app desktop CuongThai** (để dùng CT Work) → trong đó
 
 **Bước 6 — Chạy lại test của người dùng** (`mvnw test -Dtest=<Lớp>`) và báo Passed/Failed. Failed vì assert sai = test TỐT (tìm ra lỗi), giữ nguyên; Failed vì thiếu mock/biên dịch = sửa test.
 
+**Bước 7 (TUỲ CHỌN — chuẩn bị trước cho Lab 3; Lab 2 KHÔNG cần):** cài sẵn Docker theo mục [🐳 Chuẩn bị Docker](#-chuẩn-bị-docker-cho-lab-3--cài-trước). ⚠️ Trên Windows bước `wsl --install` **cần PowerShell quyền Admin + KHỞI ĐỘNG LẠI MÁY** — agent không tự làm trọn được: hãy **hướng dẫn người dùng** mở PowerShell admin chạy `wsl --install`, restart, rồi quay lại cài tiếp. **Docker hỏng/chưa xong KHÔNG được chặn Bước 1–6** — Lab 2 vẫn chạy ngon không cần Docker.
+
 ---
 
 ## 🖐️ Setup THỦ CÔNG từ số 0 — Windows (máy mới tinh)
@@ -121,6 +123,47 @@ cd LabFlow-AI-demo/backend
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # nếu java -version không ra 21
 ./mvnw test                                        # -> BUILD SUCCESS, Tests run: 5
 ```
+
+---
+
+## 🐳 Chuẩn bị Docker (cho Lab 3 — cài trước)
+
+> **Lab 2 (unit test) KHÔNG cần Docker** — bỏ qua mục này nếu chỉ làm Lab 2. Nhưng **Lab 3 (integration test)** chạy `mvnw verify` trên **PostgreSQL thật** qua Docker. Cài sẵn giờ để sau khỏi mất công. Chỉ cần **một máy** có Docker là đủ cho Lab 3 (vd máy nhóm trưởng).
+
+### Windows — cần quyền Admin + khởi động lại máy MỘT lần
+1. Mở **PowerShell quyền Administrator** (Start → gõ `powershell` → chuột phải → **Run as administrator**):
+   ```powershell
+   wsl --install
+   ```
+   → cài WSL2 (nền để Docker chạy). **KHỞI ĐỘNG LẠI MÁY** sau bước này.
+2. Sau khi khởi động lại, cài Docker Desktop:
+   ```powershell
+   winget install Docker.DockerDesktop
+   ```
+   (hoặc tải: https://www.docker.com/products/docker-desktop/)
+3. **Mở Docker Desktop** (Start Menu) → đợi báo **"Engine running"** (biểu tượng xanh góc dưới trái).
+4. Kiểm (mở PowerShell mới):
+   ```powershell
+   docker version          # Client + Server đều ra số
+   docker compose version
+   ```
+> `wsl --install` báo lỗi → vào **BIOS bật Virtualization (VT-x / AMD-V)**; hoặc bật Windows Features *Virtual Machine Platform* + *Windows Subsystem for Linux*, rồi khởi động lại.
+
+### macOS
+```bash
+brew install --cask docker     # hoặc tải Docker Desktop (chọn Apple Silicon / Intel)
+open -a Docker                 # mở Docker Desktop, đợi "Engine running"
+docker version
+```
+
+### Kiểm Docker chạy đúng với dự án (cho Lab 3)
+```bash
+cd <thư mục repo>
+docker compose up -d           # Postgres lên cổng 5433
+cd backend && ./mvnw verify    # integration test (ConcurrentBookingIT) + coverage — CẦN Docker đang chạy
+docker compose down            # tắt Postgres khi xong
+```
+> ⚠️ Docker Desktop là app GUI + nặng tài nguyên — **phải mở lên và để chạy nền** thì `mvnw verify` mới dùng được. Khi chỉ làm Lab 2 thì **tắt Docker cũng không sao**. (Repo đã có sẵn `docker-java.properties` để Testcontainers khớp Docker Engine mới — không cần chỉnh.)
 
 ---
 
