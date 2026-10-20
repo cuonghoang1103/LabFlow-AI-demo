@@ -416,7 +416,7 @@ class AuthServicePolicyTest {
     @Test void utcid06_changePassword_passwordAt64Characters_isAccepted() {
         // Condition: current password is correct and the new password has exactly 64 characters.
         User u = user(UserStatus.ACTIVE);
-        String next = "A1" + "b".repeat(62);
+        String next = "A1" + "b".repeat(62); // 64 characters
         when(users.findById(7L)).thenReturn(Optional.of(u));
         when(encoder.matches("Oldpass1", "old-hash")).thenReturn(true);
         when(encoder.encode(next)).thenReturn("new-hash");
@@ -434,5 +434,51 @@ class AuthServicePolicyTest {
         assertThat(service.logout(null).message()).isEqualTo("Logged out");
         // Confirmation: no token is loaded or changed.
         verifyNoInteractions(tokens);
+    }
+
+    @Test void utcid08_register_sixCharacterPassword_isRejected() {
+        // Condition: valid email/name but password is six characters, below the 8-character minimum.
+        goodRegisterSettings();
+        // Act + confirmation: reject before persistence or verification mail.
+        assertThatThrownBy(() -> service.register(new RegisterRequest("student@fpt.edu.vn", "short1", "Student")))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_PASSWORD_WEAK);
+        verify(users, never()).save(any());
+        verifyNoInteractions(mail);
+    }
+
+    @Test void utcid09_register_emailOver100Characters_isRejected() {
+        // Condition: syntactically valid school email whose normalized length is 101 (>100).
+        String email = "a".repeat(90) + "@fpt.edu.vn"; // 101 characters
+        // Act + confirmation: reject the length boundary before consulting settings or repositories.
+        assertThatThrownBy(() -> service.register(new RegisterRequest(email, "Password1", "Student")))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_EMAIL_INVALID);
+        verifyNoInteractions(settings, users, mail);
+    }
+
+    @Test void utcid10_register_passwordAt64Characters_isAccepted() {
+        // Condition: valid new account and password with exactly 64 characters (maximum).
+        goodRegisterSettings();
+        Role role = new Role(); role.setCode(RoleCode.STUDENT);
+        String password = "A1" + "b".repeat(62); // 64 characters
+        when(roles.findByCode(RoleCode.STUDENT)).thenReturn(Optional.of(role));
+        when(encoder.encode(password)).thenReturn("hash");
+        // Act
+        RegisterResponse response = service.register(new RegisterRequest("student@fpt.edu.vn", password, "Student"));
+        // Confirmation: upper inclusive boundary succeeds and creates the verification token.
+        assertThat(response.status()).isEqualTo("PENDING");
+        verify(users).save(any(User.class));
+        verify(tokens).save(any(UserToken.class));
+    }
+
+    @Test void utcid07_changePassword_nullCurrent_throwsWrongPassword() {
+        // Condition: existing user but no current password is supplied.
+        when(users.findById(7L)).thenReturn(Optional.of(user(UserStatus.ACTIVE)));
+        // Act + confirmation: reject without checking or changing the password.
+        assertThatThrownBy(() -> service.changePassword(7L, new ChangePasswordRequest(null, "Newpass1")))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_WRONG_PASSWORD);
+        verifyNoInteractions(encoder, tokens);
     }
 }
