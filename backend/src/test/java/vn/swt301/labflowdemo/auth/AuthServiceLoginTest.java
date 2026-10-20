@@ -110,6 +110,8 @@ class AuthServiceLoginTest {
         assertThat(res.roles()).containsExactly("STUDENT");
         assertThat(res.refreshToken()).isNotBlank();
         assertThat(user.getFailedLogins()).isZero();
+        assertThat(user.getLockedUntil()).isNull();
+        assertThat(res.expiresIn()).isEqualTo(900);
     }
 
     @Test
@@ -182,7 +184,7 @@ class AuthServiceLoginTest {
     void utcid06_currentTemporaryLock_rejectsLogin() {
         // Condition: active account has a temporary lock that expires after the fixed current time.
         User user = activeStudent(0);
-        user.setLockedUntil(NOW.plusSeconds(1));
+        user.setLockedUntil(NOW.plusSeconds(600));
         when(userRepository.findByEmailIgnoreCase("student1@fpt.edu.vn")).thenReturn(Optional.of(user));
 
         // Confirmation: temporary-lock error and password validation is skipped.
@@ -265,8 +267,8 @@ class AuthServiceLoginTest {
     @Test
     @DisplayName("UTCID11 [N] mixed-case email with surrounding spaces -> login succeeds")
     void utcid11_emailIsTrimmedAndCaseFolded() {
-        // Condition: active account is submitted with surrounding spaces and mixed-case email.
-        User user = activeStudent(0);
+        // Condition: active account has two earlier failures and mixed-case email with surrounding spaces.
+        User user = activeStudent(2);
         when(userRepository.findByEmailIgnoreCase("student1@fpt.edu.vn")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("Labflow123", "hashed")).thenReturn(true);
         when(accessTokenService.issue(eq(5L), anyString(), anyList())).thenReturn("jwt-token");
@@ -276,6 +278,9 @@ class AuthServiceLoginTest {
         TokenResponse response = authService.login(new LoginRequest("  Student1@FPT.EDU.VN  ", "Labflow123"));
 
         assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(response.refreshToken()).isNotBlank();
+        assertThat(user.getFailedLogins()).isZero();
         verify(userRepository).findByEmailIgnoreCase("student1@fpt.edu.vn");
     }
 
@@ -306,6 +311,7 @@ class AuthServiceLoginTest {
         TokenResponse response = authService.login(new LoginRequest("student1@fpt.edu.vn", "Labflow123"));
 
         assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(user.getFailedLogins()).isZero();
         assertThat(user.getLockedUntil()).isNull();
     }
 

@@ -77,7 +77,7 @@ class AuthServicePolicyTest {
                 .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException)e).getCode()).isEqualTo(ErrorCode.AUTH_EMAIL_DOMAIN_NOT_ALLOWED);
     }
 
-    @Test void utcid04_verify_validToken_activatesUser() {
+    @Test void utcid01_verify_validToken_activatesUser() {
         // Arrange - Condition: unused, unexpired verification token
         User u = user(UserStatus.PENDING); when(tokens.findByTokenHashAndPurpose(SecureTokens.hash("verify"), TokenPurpose.VERIFY)).thenReturn(Optional.of(token(TokenPurpose.VERIFY, "verify", NOW.plusSeconds(60), null)));
         when(users.findById(7L)).thenReturn(Optional.of(u));
@@ -87,7 +87,7 @@ class AuthServicePolicyTest {
         assertThat(u.getStatus()).isEqualTo(UserStatus.ACTIVE); assertThat(result.message()).contains("verified");
     }
 
-    @Test void utcid05_verify_expiredToken_throwsExpired() {
+    @Test void utcid02_verify_expiredToken_throwsExpired() {
         // Arrange - Condition: token expires at current instant
         when(tokens.findByTokenHashAndPurpose(anyString(), eq(TokenPurpose.VERIFY))).thenReturn(Optional.of(token(TokenPurpose.VERIFY, "verify", NOW, null)));
         // Act + Assert - Confirmation
@@ -112,7 +112,7 @@ class AuthServicePolicyTest {
         verify(tokens).invalidateAll(7L, TokenPurpose.REFRESH, NOW);
     }
 
-    @Test void utcid08_logout_unusedToken_marksUsed() {
+    @Test void utcid01_logout_unusedToken_marksUsed() {
         // Arrange - Condition: known unused refresh token
         UserToken t = token(TokenPurpose.REFRESH, "logout", NOW.plusSeconds(60), null); when(tokens.findByTokenHashAndPurpose(anyString(), eq(TokenPurpose.REFRESH))).thenReturn(Optional.of(t));
         // Act
@@ -121,14 +121,14 @@ class AuthServicePolicyTest {
         assertThat(result.message()).isEqualTo("Logged out"); assertThat(t.getUsedAt()).isEqualTo(NOW);
     }
 
-    @Test void utcid09_changePassword_wrongCurrent_throwsWrongPassword() {
+    @Test void utcid01_changePassword_wrongCurrent_throwsWrongPassword() {
         // Arrange - Condition: current password does not match
         when(users.findById(7L)).thenReturn(Optional.of(user(UserStatus.ACTIVE))); when(encoder.matches("bad", "old-hash")).thenReturn(false);
         // Act + Assert - Confirmation
         assertThatThrownBy(() -> service.changePassword(7L, new ChangePasswordRequest("bad", "Newpass1"))).isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException)e).getCode()).isEqualTo(ErrorCode.AUTH_WRONG_PASSWORD);
     }
 
-    @Test void utcid10_changePassword_valid_updatesAndRevokesRefreshTokens() {
+    @Test void utcid02_changePassword_valid_updatesAndRevokesRefreshTokens() {
         // Arrange - Condition: matching current and different strong new password
         User u = user(UserStatus.ACTIVE); when(users.findById(7L)).thenReturn(Optional.of(u)); when(encoder.matches("Oldpass1", "old-hash")).thenReturn(true); when(encoder.encode("Newpass1")).thenReturn("new-hash");
         // Act
@@ -162,11 +162,11 @@ class AuthServicePolicyTest {
         verifyNoInteractions(tokens);
     }
 
-    @Test void register_weakPassword_doesNotCreateAccount() {
-        // Given: email, domain and name are valid, but the password has fewer than eight characters.
+    @Test void utcid04_register_weakPassword_doesNotCreateAccount() {
+        // Given: email, domain and name are valid, but the password has exactly seven characters.
         goodRegisterSettings();
         // When: registering fails at the password policy (before the duplicate-email lookup).
-        assertThatThrownBy(() -> service.register(new RegisterRequest("student@fpt.edu.vn", "short1", "Student")))
+        assertThatThrownBy(() -> service.register(new RegisterRequest("student@fpt.edu.vn", "short12", "Student")))
                 .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
                 .isEqualTo(ErrorCode.AUTH_PASSWORD_WEAK);
         // Then: an invalid registration neither persists a user nor sends a verification email.
@@ -174,7 +174,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(mail);
     }
 
-    @Test void register_invalidName_doesNotCreateAccount() {
+    @Test void utcid05_register_invalidName_doesNotCreateAccount() {
         // Given: a permitted email and valid password, but a whitespace-only full name.
         goodRegisterSettings();
         // When/then: the name validation stops registration before any persistence or mail.
@@ -185,7 +185,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(mail);
     }
 
-    @Test void register_invalidEmail_doesNotConsultDomainSetting() {
+    @Test void utcid06_register_invalidEmail_doesNotConsultDomainSetting() {
         // Given: malformed email; domain policy must not be consulted for invalid syntax.
         assertThatThrownBy(() -> service.register(new RegisterRequest("not-an-email", "Password1", "Student")))
                 .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
@@ -193,7 +193,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(settings, users, mail);
     }
 
-    @Test void verify_usedToken_doesNotActivateAccount() {
+    @Test void utcid03_verify_usedToken_doesNotActivateAccount() {
         // Given: a verification link was consumed one second ago.
         when(tokens.findByTokenHashAndPurpose(SecureTokens.hash("verify"), TokenPurpose.VERIFY))
                 .thenReturn(Optional.of(token(TokenPurpose.VERIFY, "verify", NOW.plusSeconds(60), NOW.minusSeconds(1))));
@@ -204,7 +204,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(users);
     }
 
-    @Test void verify_activeAccount_keepsActiveButConsumesToken() {
+    @Test void utcid04_verify_activeAccount_keepsActiveButConsumesToken() {
         // Given: an active account and a fresh, valid verification token.
         User u = user(UserStatus.ACTIVE);
         UserToken t = token(TokenPurpose.VERIFY, "verify", NOW.plusSeconds(60), null);
@@ -217,7 +217,7 @@ class AuthServicePolicyTest {
         assertThat(t.getUsedAt()).isEqualTo(NOW);
     }
 
-    @Test void changePassword_sameAsCurrent_doesNotRevokeSessions() {
+    @Test void utcid03_changePassword_sameAsCurrent_doesNotRevokeSessions() {
         // Given: the current password matches; the requested new password is identical.
         when(users.findById(7L)).thenReturn(Optional.of(user(UserStatus.ACTIVE)));
         when(encoder.matches("Oldpass1", "old-hash")).thenReturn(true);
@@ -229,7 +229,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(tokens);
     }
 
-    @Test void changePassword_missingUser_doesNotCheckPassword() {
+    @Test void utcid04_changePassword_missingUser_doesNotCheckPassword() {
         // Given: there is no account for the requested ID.
         when(users.findById(999L)).thenReturn(Optional.empty());
         // When/then: report USER_NOT_FOUND without trying a password hash.
@@ -239,7 +239,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(encoder, tokens);
     }
 
-    @Test void logout_usedToken_doesNotOverwriteUsedAt() {
+    @Test void utcid02_logout_usedToken_doesNotOverwriteUsedAt() {
         // Given: a previously revoked refresh token with its original revocation timestamp.
         Instant used = NOW.minusSeconds(60);
         UserToken t = token(TokenPurpose.REFRESH, "logout", NOW.plusSeconds(60), used);
@@ -252,14 +252,14 @@ class AuthServicePolicyTest {
         verify(tokens, never()).save(any());
     }
 
-    @Test void logout_blankToken_succeedsWithoutLookup() {
+    @Test void utcid03_logout_blankToken_succeedsWithoutLookup() {
         // Given: blank input; logout is deliberately idempotent even without a known token.
         assertThat(service.logout("  ").message()).isEqualTo("Logged out");
         // Then: no database access is needed.
         verifyNoInteractions(tokens);
     }
 
-    @Test void verify_nullToken_rejectsWithoutLookup() {
+    @Test void utcid05_verify_nullToken_rejectsWithoutLookup() {
         // Condition: no verification token is supplied.
         // Act: attempt to verify the account.
         assertThatThrownBy(() -> service.verifyEmail(null))
@@ -269,7 +269,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(tokens, users);
     }
 
-    @Test void verify_unknownToken_rejectsWithoutChangingUser() {
+    @Test void utcid06_verify_unknownToken_rejectsWithoutChangingUser() {
         // Condition: a nonblank token has no matching VERIFY record.
         when(tokens.findByTokenHashAndPurpose(SecureTokens.hash("unknown"), TokenPurpose.VERIFY))
                 .thenReturn(Optional.empty());
@@ -280,7 +280,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(users);
     }
 
-    @Test void changePassword_weakNewPassword_keepsOldHashAndSessions() {
+    @Test void utcid05_changePassword_weakNewPassword_keepsOldHashAndSessions() {
         // Condition: correct current password, but the new password lacks the required length.
         User u = user(UserStatus.ACTIVE);
         when(users.findById(7L)).thenReturn(Optional.of(u));
@@ -294,7 +294,7 @@ class AuthServicePolicyTest {
         verifyNoInteractions(tokens);
     }
 
-    @Test void logout_unknownToken_isIdempotent() {
+    @Test void utcid04_logout_unknownToken_isIdempotent() {
         // Condition: a syntactically valid refresh token is not stored.
         when(tokens.findByTokenHashAndPurpose(SecureTokens.hash("unknown"), TokenPurpose.REFRESH))
                 .thenReturn(Optional.empty());
@@ -397,5 +397,42 @@ class AuthServicePolicyTest {
                 .isEqualTo(ErrorCode.AUTH_TOKEN_EXPIRED);
         // Confirmation: no password is changed.
         verifyNoInteractions(users, encoder);
+    }
+
+    @Test void utcid07_register_passwordAtEightCharacters_isAccepted() {
+        // Condition: Abcdefg1 has exactly 8 characters (minimum).
+        goodRegisterSettings();
+        Role role = new Role(); role.setCode(RoleCode.STUDENT);
+        when(roles.findByCode(RoleCode.STUDENT)).thenReturn(Optional.of(role));
+        when(encoder.encode("Abcdefg1")).thenReturn("hash");
+        // Act: register with an eight-character password.
+        RegisterResponse response = service.register(new RegisterRequest("student@fpt.edu.vn", "Abcdefg1", "Student"));
+        // Confirmation: lower inclusive boundary succeeds and a verification token is issued.
+        assertThat(response.status()).isEqualTo("PENDING");
+        verify(users).save(any(User.class));
+        verify(tokens).save(any(UserToken.class));
+    }
+
+    @Test void utcid06_changePassword_passwordAt64Characters_isAccepted() {
+        // Condition: current password is correct and the new password has exactly 64 characters.
+        User u = user(UserStatus.ACTIVE);
+        String next = "A1" + "b".repeat(62);
+        when(users.findById(7L)).thenReturn(Optional.of(u));
+        when(encoder.matches("Oldpass1", "old-hash")).thenReturn(true);
+        when(encoder.encode(next)).thenReturn("new-hash");
+        // Act: change to the upper boundary password.
+        assertThat(service.changePassword(7L, new ChangePasswordRequest("Oldpass1", next)).message())
+                .isEqualTo("Password changed");
+        // Confirmation: new hash is stored and old refresh sessions are invalidated.
+        assertThat(u.getPasswordHash()).isEqualTo("new-hash");
+        verify(tokens).invalidateAll(7L, TokenPurpose.REFRESH, NOW);
+    }
+
+    @Test void utcid05_logout_nullToken_succeedsWithoutLookup() {
+        // Condition: refresh token is null (absence of input).
+        // Act: request logout.
+        assertThat(service.logout(null).message()).isEqualTo("Logged out");
+        // Confirmation: no token is loaded or changed.
+        verifyNoInteractions(tokens);
     }
 }
