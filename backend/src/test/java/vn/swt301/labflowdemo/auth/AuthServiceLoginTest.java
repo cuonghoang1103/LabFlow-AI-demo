@@ -136,7 +136,8 @@ class AuthServiceLoginTest {
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("student1@fpt.edu.vn", "wrong123")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Invalid email or password");          // = dòng Log message
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_INVALID_CREDENTIALS);
         // Confirmation: invalid-credentials error, one failure counted, and no temporary lock yet.
         assertThat(user.getFailedLogins()).isEqualTo(1);
         assertThat(user.getLockedUntil()).isNull();
@@ -160,8 +161,25 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID05 [B] active account still temporarily locked -> AUTH_ACCOUNT_TEMP_LOCKED")
-    void utcid05_currentTemporaryLock_rejectsLogin() {
+    @DisplayName("UTCID05 [B] fourth failed login does not lock before the fifth attempt")
+    void utcid05_fourthFailure_doesNotLockYet() {
+        // Given: three failed attempts already recorded, with a configured limit of five.
+        User user = activeStudent(3);
+        when(userRepository.findByEmailIgnoreCase("student1@fpt.edu.vn")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong123", "hashed")).thenReturn(false);
+        // When: the fourth wrong password is submitted.
+        assertThatThrownBy(() -> authService.login(new LoginRequest("student1@fpt.edu.vn", "wrong123")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_INVALID_CREDENTIALS);
+        // Then: the counter rises to four without starting the temporary lock.
+        assertThat(user.getFailedLogins()).isEqualTo(4);
+        assertThat(user.getLockedUntil()).isNull();
+    }
+
+    @Test
+    @DisplayName("UTCID06 [A] active account still temporarily locked -> AUTH_ACCOUNT_TEMP_LOCKED")
+    void utcid06_currentTemporaryLock_rejectsLogin() {
         // Condition: active account has a temporary lock that expires after the fixed current time.
         User user = activeStudent(0);
         user.setLockedUntil(NOW.plusSeconds(1));
@@ -176,8 +194,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID06 [B] administratively LOCKED account -> AUTH_ACCOUNT_LOCKED")
-    void utcid06_lockedAccount_rejectsLogin() {
+    @DisplayName("UTCID08 [A] administratively LOCKED account -> AUTH_ACCOUNT_LOCKED")
+    void utcid08_lockedAccount_rejectsLogin() {
         // Condition: account status is LOCKED, regardless of a correct password.
         User user = activeStudent(0);
         user.setStatus(UserStatus.LOCKED);
@@ -192,8 +210,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID07 [B] PENDING account with correct password -> AUTH_EMAIL_NOT_VERIFIED")
-    void utcid07_pendingAccount_rejectsLogin() {
+    @DisplayName("UTCID09 [A] PENDING account with correct password -> AUTH_EMAIL_NOT_VERIFIED")
+    void utcid09_pendingAccount_rejectsLogin() {
         // Condition: email is verified neither, account is PENDING, and password is correct.
         User user = activeStudent(0);
         user.setStatus(UserStatus.PENDING);
@@ -209,8 +227,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID08 [A] null email -> AUTH_INVALID_CREDENTIALS")
-    void utcid08_nullEmail_rejectsLogin() {
+    @DisplayName("Extra: null email -> AUTH_INVALID_CREDENTIALS")
+    void extra_nullEmail_rejectsLogin() {
         // Condition: login request has a null email.
         // Confirmation: invalid-credentials error before repository lookup.
         assertThatThrownBy(() -> authService.login(new LoginRequest(null, "Labflow123")))
@@ -221,8 +239,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID09 [A] empty email -> AUTH_INVALID_CREDENTIALS")
-    void utcid09_emptyEmail_rejectsLogin() {
+    @DisplayName("Extra: empty email -> AUTH_INVALID_CREDENTIALS")
+    void extra_emptyEmail_rejectsLogin() {
         // Condition: login request has an empty email.
         // Confirmation: invalid-credentials error before repository lookup.
         assertThatThrownBy(() -> authService.login(new LoginRequest("", "Labflow123")))
@@ -233,8 +251,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID10 [A] whitespace-only email -> AUTH_INVALID_CREDENTIALS")
-    void utcid10_whitespaceEmail_rejectsLogin() {
+    @DisplayName("UTCID12 [A] whitespace-only email -> AUTH_INVALID_CREDENTIALS")
+    void utcid12_whitespaceEmail_rejectsLogin() {
         // Condition: login request has only whitespace as email.
         // Confirmation: invalid-credentials error before repository lookup.
         assertThatThrownBy(() -> authService.login(new LoginRequest("   ", "Labflow123")))
@@ -262,8 +280,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID12 [A] null password -> AUTH_INVALID_CREDENTIALS")
-    void utcid12_nullPassword_rejectsLogin() {
+    @DisplayName("UTCID13 [A] null password -> AUTH_INVALID_CREDENTIALS")
+    void utcid13_nullPassword_rejectsLogin() {
         // Condition: known-looking login request has a null password.
         // Confirmation: invalid-credentials error before repository lookup.
         assertThatThrownBy(() -> authService.login(new LoginRequest("student1@fpt.edu.vn", null)))
@@ -274,8 +292,8 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    @DisplayName("UTCID13 [N] temporary lock expires exactly now -> password is evaluated")
-    void utcid13_lockExpiryBoundary_allowsLogin() {
+    @DisplayName("UTCID07 [B] temporary lock expires exactly now -> password is evaluated")
+    void utcid07_lockExpiryBoundary_allowsLogin() {
         // Condition: temporary lock expires exactly at the fixed current instant.
         User user = activeStudent(0);
         user.setLockedUntil(NOW);
@@ -289,5 +307,23 @@ class AuthServiceLoginTest {
 
         assertThat(response.accessToken()).isEqualTo("jwt-token");
         assertThat(user.getLockedUntil()).isNull();
+    }
+
+    @Test
+    @DisplayName("UTCID10 [A] pending account with wrong password returns invalid credentials")
+    void utcid10_pendingWrongPassword_doesNotRevealAccountStatus() {
+        // Condition: unverified account supplies the wrong password.
+        User user = activeStudent(0);
+        user.setStatus(UserStatus.PENDING);
+        when(userRepository.findByEmailIgnoreCase("student1@fpt.edu.vn")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong123", "hashed")).thenReturn(false);
+        // Act: attempt to log in before verification.
+        assertThatThrownBy(() -> authService.login(new LoginRequest("student1@fpt.edu.vn", "wrong123")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AUTH_INVALID_CREDENTIALS);
+        // Confirmation: do not disclose PENDING status or issue a token.
+        assertThat(user.getFailedLogins()).isEqualTo(1);
+        verify(accessTokenService, never()).issue(any(), any(), any());
     }
 }

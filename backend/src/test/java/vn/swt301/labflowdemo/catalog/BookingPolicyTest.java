@@ -49,4 +49,35 @@ class BookingPolicyTest {
         // Act + Assert - Confirmation
         assertThatThrownBy(() -> policy.checkPeriod(Instant.parse("2026-10-27T03:00:00Z"), Instant.parse("2026-10-27T04:00:00Z"))).isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException)e).getCode()).isEqualTo(ErrorCode.TIME_TOO_FAR_AHEAD);
     }
+
+    @Test void checkPeriod_exactlyFourteenDaysAhead_isAllowed() {
+        // Condition: start is on the half-hour grid exactly 14 days after NOW.
+        // Act and confirmation: the inclusive upper advance boundary is accepted.
+        policy.checkPeriod(NOW.plusSeconds(14L * 24 * 60 * 60),
+                NOW.plusSeconds(14L * 24 * 60 * 60 + 1800));
+    }
+
+    @Test void checkPeriod_startEqualToNow_isRejected() {
+        // Condition: start equals the fixed current time (not strictly in the future).
+        // Act and confirmation: reject even though the time is aligned to the grid.
+        assertThatThrownBy(() -> policy.checkPeriod(NOW, NOW.plusSeconds(1800)))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.TIME_IN_PAST);
+    }
+
+    @Test void checkPeriod_equalEndpoints_isRejectedBeforeCheckingGrid() {
+        // Condition: a zero-length time period.
+        // Act and confirmation: range validation takes precedence over alignment.
+        assertThatThrownBy(() -> policy.checkPeriod(NOW.plusSeconds(3600), NOW.plusSeconds(3600)))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.TIME_RANGE_INVALID);
+    }
+
+    @Test void checkPeriod_endOffGrid_isRejected() {
+        // Condition: start is on grid, but the end falls 15 minutes off grid.
+        // Act and confirmation: both endpoints must align, not only the start.
+        assertThatThrownBy(() -> policy.checkPeriod(NOW.plusSeconds(3600), NOW.plusSeconds(4500)))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.TIME_SLOT_MISALIGNED);
+    }
 }

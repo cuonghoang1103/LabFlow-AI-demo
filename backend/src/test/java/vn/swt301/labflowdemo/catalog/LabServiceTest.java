@@ -65,4 +65,92 @@ class LabServiceTest {
         assertEquals(ErrorCode.BUILDING_CODE_TAKEN, ex.getCode());
         verifyNoInteractions(campusRepository);
     }
+
+    @Test
+    void utcid29_N_createBuilding_acceptsTwoCharacterCode() {
+        // Condition: minimum-length code and one campus exist.
+        Campus campus = new Campus(); campus.setId(3);
+        when(campusRepository.findAll()).thenReturn(List.of(campus));
+        // Act: create a building using the minimum valid code.
+        Building result = service.createBuilding(new BuildingRequest(" a1 ", "Name"), 77L);
+        // Confirmation: code is normalized and the building is active.
+        assertEquals("A1", result.getCode());
+        assertEquals(ActiveStatus.ACTIVE, result.getStatus());
+        verify(buildingRepository).save(result);
+    }
+
+    @Test
+    void utcid30_N_createBuilding_acceptsTwentyCharacterCode() {
+        // Condition: the code has exactly twenty valid characters.
+        Campus campus = new Campus(); campus.setId(3);
+        when(campusRepository.findAll()).thenReturn(List.of(campus));
+        // Act: create a building at the upper boundary.
+        Building result = service.createBuilding(new BuildingRequest("a".repeat(20), "Name"), 77L);
+        // Confirmation: normalized twenty-character code persists.
+        assertEquals("A".repeat(20), result.getCode());
+        verify(buildingRepository).save(result);
+    }
+
+    @Test
+    void utcid31_B_createBuilding_rejectsOneCharacterCode() {
+        // Condition: code is shorter than the minimum length.
+        // Act: attempt to create the building.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createBuilding(new BuildingRequest("A", "Name"), 77L));
+        // Confirmation: validation prevents repository writes and audit.
+        assertEquals(ErrorCode.BUILDING_CODE_INVALID, ex.getCode());
+        verifyNoInteractions(buildingRepository, campusRepository, auditService);
+    }
+
+    @Test
+    void utcid32_B_createBuilding_rejectsTwentyOneCharacterCode() {
+        // Condition: code exceeds the twenty-character maximum.
+        // Act: attempt to create the building.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createBuilding(new BuildingRequest("A".repeat(21), "Name"), 77L));
+        // Confirmation: code validation prevents persistence.
+        assertEquals(ErrorCode.BUILDING_CODE_INVALID, ex.getCode());
+        verifyNoInteractions(buildingRepository, campusRepository, auditService);
+    }
+
+    @Test
+    void utcid33_B_createBuilding_rejectsBlankName() {
+        // Condition: code is valid but the name is whitespace only.
+        // Act: attempt to create the building.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createBuilding(new BuildingRequest("AB", "  "), 77L));
+        // Confirmation: name validation occurs before uniqueness lookup.
+        assertEquals(ErrorCode.LAB_NAME_INVALID, ex.getCode());
+        verifyNoInteractions(buildingRepository, campusRepository, auditService);
+    }
+
+    @Test
+    void utcidTv3_46_B_createBuilding_rejectsNullCode() {
+        // Condition: building request does not contain a code.
+        // Act: attempt to create the building.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createBuilding(new BuildingRequest(null, "Name"), 77L));
+        // Confirmation: a missing code is invalid before any repository work.
+        assertEquals(ErrorCode.BUILDING_CODE_INVALID, ex.getCode());
+        verifyNoInteractions(buildingRepository, campusRepository);
+    }
+
+    @Test
+    void utcidTv3_47_B_createBuilding_rejectsNameOver100Characters() {
+        // Condition: code is valid but trimmed name is 101 characters.
+        // Act: attempt to create the building.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createBuilding(
+                new BuildingRequest("AB", "N".repeat(101)), 77L));
+        // Confirmation: name length is checked before uniqueness lookup.
+        assertEquals(ErrorCode.LAB_NAME_INVALID, ex.getCode());
+        verifyNoInteractions(buildingRepository, campusRepository);
+    }
+
+    @Test
+    void utcidTv3_48_N_createBuilding_acceptsNameAt100Characters() {
+        // Condition: one campus exists and the name is exactly 100 characters long.
+        Campus campus = new Campus(); campus.setId(3);
+        when(campusRepository.findAll()).thenReturn(List.of(campus));
+        // Act: create the building at the name upper boundary.
+        Building result = service.createBuilding(new BuildingRequest("AB", "N".repeat(100)), 77L);
+        // Confirmation: the full name is kept and the building is saved.
+        assertEquals("N".repeat(100), result.getName());
+        verify(buildingRepository).save(result);
+    }
 }

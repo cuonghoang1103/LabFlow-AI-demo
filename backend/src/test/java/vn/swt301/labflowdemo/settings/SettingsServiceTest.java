@@ -52,4 +52,76 @@ class SettingsServiceTest {
         // Act + Assert - Confirmation
         assertThatThrownBy(() -> service.updateSetting("missing", "1", 9L)).isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException)e).getCode()).isEqualTo(ErrorCode.SETTING_NOT_FOUND);
     }
+
+    @Test void updateSetting_minimumAndMaximumInteger_areAccepted() {
+        // Condition: INT range is inclusive at both endpoints 1 and 60.
+        AppSetting s = setting("INT", "14", 1, 60);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act: update at each boundary.
+        service.updateSetting(s.getKey(), "1", 9L);
+        service.updateSetting(s.getKey(), "60", 9L);
+        // Confirmation: both values persist in the same setting object.
+        assertThat(s.getValue()).isEqualTo("60");
+        verify(audit).record(9L, "SETTING", s.getKey(), "UPDATE", "14", "1");
+        verify(audit).record(9L, "SETTING", s.getKey(), "UPDATE", "1", "60");
+    }
+
+    @Test void updateSetting_zeroBelowMinimum_doesNotMutateSetting() {
+        // Condition: zero is one below the minimum of 1.
+        AppSetting s = setting("INT", "14", 1, 60);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act and confirmation: reject the value without writing or auditing.
+        assertThatThrownBy(() -> service.updateSetting(s.getKey(), "0", 9L))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.SETTING_VALUE_INVALID);
+        assertThat(s.getValue()).isEqualTo("14");
+        verifyNoInteractions(audit);
+    }
+
+    @Test void updateSetting_nonNumericInteger_doesNotMutateSetting() {
+        // Condition: INT settings only accept whole numbers.
+        AppSetting s = setting("INT", "14", 1, 60);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act and confirmation: alphabetic input is not silently coerced to a number.
+        assertThatThrownBy(() -> service.updateSetting(s.getKey(), "abc", 9L))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.SETTING_VALUE_INVALID);
+        assertThat(s.getValue()).isEqualTo("14");
+        verifyNoInteractions(audit);
+    }
+
+    @Test void updateSetting_blankValue_isRejected() {
+        // Condition: whitespace is cleaned to null before type-specific validation.
+        AppSetting s = setting("STRING", "before", null, null);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act and confirmation: blank input leaves the old value intact.
+        assertThatThrownBy(() -> service.updateSetting(s.getKey(), "  ", 9L))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.SETTING_VALUE_INVALID);
+        assertThat(s.getValue()).isEqualTo("before");
+        verifyNoInteractions(audit);
+    }
+
+    @Test void updateSetting_stringAt255Characters_isAccepted() {
+        // Condition: an arbitrary STRING at its maximum allowed length.
+        AppSetting s = setting("STRING", "before", null, null);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act: write 255 characters.
+        service.updateSetting(s.getKey(), "a".repeat(255), 9L);
+        // Confirmation: full value is retained and audited.
+        assertThat(s.getValue()).hasSize(255);
+        verify(audit).record(9L, "SETTING", s.getKey(), "UPDATE", "before", "a".repeat(255));
+    }
+
+    @Test void updateSetting_stringAt256Characters_isRejected() {
+        // Condition: one character above the maximum length.
+        AppSetting s = setting("STRING", "before", null, null);
+        when(repository.findById(s.getKey())).thenReturn(Optional.of(s));
+        // Act and confirmation: no truncated or partial update occurs.
+        assertThatThrownBy(() -> service.updateSetting(s.getKey(), "a".repeat(256), 9L))
+                .isInstanceOf(BusinessException.class).extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.SETTING_VALUE_INVALID);
+        assertThat(s.getValue()).isEqualTo("before");
+        verifyNoInteractions(audit);
+    }
 }

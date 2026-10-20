@@ -112,4 +112,78 @@ class LabServiceTv4Test {
         assertEquals(ErrorCode.LAB_CODE_TAKEN, ex.getCode());
         verify(auditService, never()).record(anyLong(), anyString(), any(), anyString(), any(), any());
     }
+
+    @Test void createLab_atApprovalThresholdDoesNotRequireApproval() {
+        // Condition: capacity equals the configured threshold, not greater than it.
+        when(buildingRepository.findById(10)).thenReturn(Optional.of(activeBuilding()));
+        when(labRepository.findByCodeIgnoreCase("AL-301")).thenReturn(Optional.empty());
+        when(settings.getInt("booking.approval-capacity")).thenReturn(30);
+        // Act: create the lab at capacity 30.
+        Lab result = service.createLab(new LabRequest(10, "AL-301", "Physics", 0, 30, null), 7L);
+        // Confirmation: floor zero is valid and approval is not required at the boundary.
+        assertEquals(0, result.getFloor());
+        assertFalse(result.isRequiresApproval());
+        verify(labRepository).save(result);
+    }
+
+    @Test void createLab_aboveApprovalThresholdRequiresApproval() {
+        // Condition: 31 seats is one above the BR-06 threshold of 30.
+        when(buildingRepository.findById(10)).thenReturn(Optional.of(activeBuilding()));
+        when(settings.getInt("booking.approval-capacity")).thenReturn(30);
+        // Act: create the lab at the first capacity requiring approval.
+        Lab result = service.createLab(new LabRequest(10, "AL-301", "Physics", 50, 31, null), 7L);
+        // Confirmation: floor 50 is valid and approval is required.
+        assertEquals("AL-301", result.getCode());
+        assertEquals(50, result.getFloor());
+        assertTrue(result.isRequiresApproval());
+        verify(labRepository).save(result);
+    }
+
+    @Test void createLab_aboveMaximumCapacityRejectsWithoutSaving() {
+        // Condition: 201 exceeds the maximum capacity of 200.
+        when(buildingRepository.findById(10)).thenReturn(Optional.of(activeBuilding()));
+        // Act: submit the out-of-range request.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createLab(
+                new LabRequest(10, "AL-301", "Physics", 50, 201, null), 7L));
+        // Confirmation: no persistence or audit occurs.
+        assertEquals(ErrorCode.LAB_CAPACITY_INVALID, ex.getCode());
+        verifyNoInteractions(labRepository, settings, auditService);
+    }
+
+    @Test void createLab_belowMinimumCapacityRejectsWithoutSaving() {
+        // Condition: capacity zero falls below the minimum of one.
+        when(buildingRepository.findById(10)).thenReturn(Optional.of(activeBuilding()));
+        // Act: try to create a zero-capacity lab.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createLab(
+                new LabRequest(10, "AL-301", "Physics", 0, 0, null), 7L));
+        // Confirmation: reject before duplicate lookup, save or audit.
+        assertEquals(ErrorCode.LAB_CAPACITY_INVALID, ex.getCode());
+        verifyNoInteractions(labRepository, settings, auditService);
+    }
+
+    @Test void updateLab_missingVersionRejectsBeforeChangingAnything() {
+        // Condition: the existing lab has a version, but the client omitted it.
+        Lab lab = new Lab(); lab.setId(21); lab.setVersion(2); lab.setBuildingId(10);
+        when(labRepository.findById(21)).thenReturn(Optional.of(lab));
+        // Act: attempt update without optimistic-lock version.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.updateLab(21, request(null), 7L));
+        // Confirmation: the request cannot overwrite the existing lab.
+        assertEquals(ErrorCode.CONCURRENT_UPDATE, ex.getCode());
+        verifyNoInteractions(buildingRepository, settings, auditService);
+    }
+
+    @Test void updateLab_movingToClosedBuildingRejectsBeforeChangingLab() {
+        // Condition: request moves an existing lab to a different, CLOSED building.
+        Lab lab = new Lab(); lab.setId(21); lab.setVersion(2); lab.setBuildingId(11); lab.setCode("OLD");
+        Building closed = activeBuilding(); closed.setStatus(ActiveStatus.CLOSED);
+        when(labRepository.findById(21)).thenReturn(Optional.of(lab));
+        when(buildingRepository.findById(10)).thenReturn(Optional.of(closed));
+        // Act: submit a matching-version update to building 10.
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.updateLab(21, request(2), 7L));
+        // Confirmation: original building and code remain unchanged, no audit occurs.
+        assertEquals(ErrorCode.BUILDING_CLOSED, ex.getCode());
+        assertEquals(11, lab.getBuildingId());
+        assertEquals("OLD", lab.getCode());
+        verifyNoInteractions(settings, auditService);
+    }
 }
